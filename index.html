@@ -1168,8 +1168,8 @@
           <span class="chip"><strong>13</strong> 논문 (2018–2024)</span>
           <span class="chip"><strong>13</strong> 분석 보고서</span>
           <span class="chip"><strong>13</strong> 비전공자 해설</span>
-          <span class="chip"><strong>7</strong> 종합 문서</span>
-          <span class="chip"><strong>1</strong> 솔로 개발자 로드맵</span>
+          <span class="chip"><strong>6</strong> 종합 문서</span>
+          <span class="chip"><strong>2</strong> 로드맵 문서</span>
           <span class="chip ok">인터넷 연결 없이 작동</span>
         </div>
       </header>
@@ -1579,6 +1579,14 @@
   const liveHeader = document.getElementById('live-modal-header');
   const liveWindow = document.getElementById('live-modal-window');
   const liveDl     = document.getElementById('live-modal-download');
+  const pageContainer = document.querySelector('.container');
+
+  // 모달 내 포커스 가능한 요소 수집 (포커스 트랩용)
+  function getModalFocusable() {
+    const sel = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.prototype.slice.call(liveModal.querySelectorAll(sel))
+      .filter(el => el.offsetParent !== null && !el.hasAttribute('hidden'));
+  }
 
   let lastFocus = null;
   // 현재 모달에 띄워진 문서 컨텍스트 (키보드 네비게이션용)
@@ -1729,6 +1737,8 @@
     liveDl.removeAttribute('href');
     liveModal.classList.add('open');
     liveModal.setAttribute('aria-hidden', 'false');
+    // 배경을 비활성화: Tab/스크린리더가 모달 뒤로 새지 않도록
+    if (pageContainer) { pageContainer.setAttribute('inert', ''); pageContainer.setAttribute('aria-hidden', 'true'); }
     document.body.style.overflow = 'hidden';
     requestAnimationFrame(() => liveModal.focus());
 
@@ -1812,6 +1822,7 @@
     try { stopAudioTTS(); } catch (e) {}
     liveModal.classList.remove('open');
     liveModal.setAttribute('aria-hidden', 'true');
+    if (pageContainer) { pageContainer.removeAttribute('inert'); pageContainer.removeAttribute('aria-hidden'); }
     document.body.style.overflow = '';
     if (lastFocus && typeof lastFocus.focus === 'function') {
       lastFocus.focus();
@@ -2056,6 +2067,19 @@
   document.addEventListener('keydown', (e) => {
     if (!liveModal.classList.contains('open')) return;
     if (e.key === 'Escape') { closeModal(); return; }
+    // Tab 포커스 트랩: 포커스를 모달 안에 가둠
+    if (e.key === 'Tab') {
+      const f = getModalFocusable();
+      if (f.length === 0) { e.preventDefault(); liveModal.focus(); return; }
+      const first = f[0], last = f[f.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === liveModal || !liveModal.contains(active)) { e.preventDefault(); last.focus(); }
+      } else {
+        if (active === last || !liveModal.contains(active)) { e.preventDefault(); first.focus(); }
+      }
+      return;
+    }
     // 입력 요소에 포커스 있으면 단축키 무시
     const tag = (document.activeElement && document.activeElement.tagName) || '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || (document.activeElement && document.activeElement.isContentEditable)) return;
