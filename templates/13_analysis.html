@@ -1,0 +1,230 @@
+<template id="doc-13_analysis" data-title="[13] Mel-RoFormer — 분석 보고서" data-docx="papers/13_ByteDance2024_MelRoFormer/분석_보고서.docx"><h1 id="mel-roformer-for-vocal-separation-and-vocal-melody-transcription-분석-보고서">Mel-RoFormer for Vocal Separation and Vocal Melody Transcription 분석 보고서</h1>
+<h2 id="핵심-요약">핵심 요약</h2>
+<p>이 논문은 ByteDance 연구팀이 ISMIR 2024에서 발표한 <strong>Mel-RoFormer</strong> 모델을 소개한다. Mel-RoFormer는 스펙트로그램(spectrogram, 시간-주파수 표현)을 입력으로 받는 트랜스포머 기반 모델로, 두 가지 음악 정보 검색(Music Information Retrieval, MIR) 과제를 동시에 겨냥한다. 하나는 <strong>보컬 분리(vocal separation)</strong> — 혼합 음원에서 노래하는 목소리만 깔끔히 떼어내는 것 — 이고, 다른 하나는 <strong>보컬 멜로디 채보(vocal melody transcription)</strong> — 그 노래의 주선율을 음표(음 시작·음높이·음 끝)로 받아 적는 것 — 이다.</p>
+<p>핵심 기술은 두 가지다. 첫째, <strong>Mel-band Projection(멜 대역 투영)</strong> 모듈을 입력 앞단에 두어, 주파수 축을 사람 귀의 청각 특성을 닮은 <strong>멜 스케일(Mel-scale)</strong> 에 따라 여러 대역(subband)으로 나눈다. 멜 스케일은 저주파에서 분해능이 높고 고주파에서 낮은데, 이 방식의 대역은 서로 <strong>겹치게(overlapping)</strong> 나뉜다는 점이 선행 모델 BS-RoFormer의 겹치지 않는(non-overlapping) 대역 분할과 다르다. 둘째, <strong>interleaved RoPE Transformer(교차 회전 위치 인코딩 트랜스포머)</strong> 를 써서 주파수 축과 시간 축을 두 개의 별도 시퀀스로 번갈아 모델링한다.</p>
+<p>학습 전략도 영리하다. 두 과제를 한 모델로 통합 학습하는 대신 <strong>2단계(two-step)</strong> 로 접근한다. 먼저 보컬 분리 모델을 학습한 뒤, 그것을 <strong>기초 모델(foundation model)</strong> 로 삼아 보컬 멜로디 채보용으로 미세조정(fine-tuning)한다. 실험 결과 Mel-RoFormer는 보컬 분리(MUSDB18HQ)와 멜로디 채보(MIR-ST500, POP909) 양쪽에서 모두 당시 최고 성능(state-of-the-art)을 달성했으며, 특히 가장 어렵다고 알려진 <strong>음 끝(offset) 검출</strong>에서 강한 견고함을 보였다.</p>
+<h2 id="서지-정보">서지 정보</h2>
+<ul>
+<li><strong>제목</strong>: Mel-RoFormer for Vocal Separation and Vocal Melody Transcription</li>
+<li><strong>저자</strong>: Ju-Chiang Wang, Wei-Tsung Lu, Jitong Chen</li>
+<li><strong>소속</strong>: ByteDance, San Jose, CA, USA</li>
+<li><strong>발표처</strong>: 25th International Society for Music Information Retrieval Conference (ISMIR 2024), San Francisco, USA</li>
+<li><strong>연도</strong>: 2024 (arXiv 제출: 2024년 9월 7일)</li>
+<li><strong>arXiv</strong>: <a href="https://arxiv.org/abs/2409.04702">arXiv:2409.04702</a> (DOI: <a href="https://doi.org/10.48550/arXiv.2409.04702">10.48550/arXiv.2409.04702</a>, 라이선스 CC BY 4.0)</li>
+<li><strong>선행 모델</strong>: BS-RoFormer (Lu, Wang, Kong, Hung, ICASSP 2024) — 음원 분리 SDX’23 1위</li>
+<li><strong>공개 구현</strong>: <a href="https://github.com/lucidrains/BS-RoFormer">github.com/lucidrains/BS-RoFormer</a>, 설정은 <a href="https://github.com/ZFTurbo/Music-Source-Separation-Training">Music-Source-Separation-Training</a></li>
+</ul>
+<h2 id="상세-요약">상세 요약</h2>
+<p>음악 오디오를 신경망으로 모델링하는 핵심 어려움은, 신호 안에 멜로디·화성·여러 악기의 음색이 복잡하게 얽혀 있다는 점이다. 전통적 방식은 스펙트로그램을 “시간에 따른 스펙트럼의 나열”로만 보고 주파수 축은 단순 특징 차원으로 취급했다. 그러나 최근에는 주파수 축 자체를 의미 있는 시퀀스로 명시적으로 모델링하는 것이 효과적임이 밝혀졌다. Mel-RoFormer의 직계 조상인 <strong>BS-RoFormer</strong>는 이 발상으로 음원 분리에서 큰 성공을 거뒀고(Sound Demixing Challenge 2023 음악 분리 트랙 1위), 그 핵심은 주파수를 여러 대역으로 쪼개는 <strong>band-split</strong> 모듈과, 시간·주파수를 두 시퀀스로 번갈아 처리하는 <strong>interleaved 트랜스포머</strong>였다.</p>
+<p>Mel-RoFormer는 BS-RoFormer의 band-split을 <strong>멜 스케일 기반 대역 분할</strong>로 개선한 후속작이다. 입력은 복소 스펙트로그램 <span class="math inline"><em>X</em></span> (채널 <span class="math inline"><em>C</em></span> × 주파수 빈 <span class="math inline"><em>F</em></span> × 시간 <span class="math inline"><em>T</em></span>)이며, STFT(단시간 푸리에 변환)로 얻는다. Mel-band Projection은 librosa의 멜 필터뱅크를 이진화해 주파수 빈을 <span class="math inline"><em>K</em></span>개의 (겹치는) 멜 대역으로 매핑하고, 각 대역마다 별도 MLP(<span class="math inline"><em>Λ</em><sub><em>k</em></sub></span>, RMSNorm + 선형층)를 적용해 대역별 특징 벡터로 투영한다. 이는 “학습 가능한 멜 필터뱅크”로 볼 수 있어, 삼각 필터 같은 고정 모양에 얽매이지 않고 모델이 스스로 최적 필터 모양을 찾는다.</p>
+<p>이어지는 <strong>RoFormer 블록</strong>은 <span class="math inline"><em>L</em></span>개의 교차 RoPE 트랜스포머 인코더로, 데이터를 시간 인덱스 형태 <span class="math inline">(<em>D</em><em>K</em> × <em>T</em>)</span> 와 대역 인덱스 형태 <span class="math inline">(<em>D</em><em>T</em> × <em>K</em>)</span> 로 번갈아 재배열하며 시간·주파수 정보를 교환한다. RoPE(회전 위치 인코딩)는 절대 위치 인코딩보다 성능이 좋고, 반복적 재배열에 대해 위치 정보를 견고히 보존한다. 마지막 <strong>Embedding Projection</strong> 모듈은 대역별 MLP(<span class="math inline"><em>Φ</em><sub><em>k</em></sub></span>)로 과제별 임베딩을 만든다.</p>
+<p><strong>보컬 분리</strong>에서는 Embedding Projection이 복소 이상비율마스크(complex Ideal Ratio Mask, cIRM)를 추정하고, 겹치는 멜 대역의 마스크 값은 평균낸다. 추정 마스크를 입력 스펙트로그램에 곱한 뒤 iSTFT로 시간 영역 신호를 복원한다. 손실은 시간 영역 MAE와 다중 해상도 복소 스펙트로그램 MAE의 합이다.</p>
+<p><strong>보컬 멜로디 채보</strong>에서는 사전학습된 분리 모델을 가져와 Embedding Projection만 새로 초기화하고, 모든 대역 출력 차원을 64로 통일한다. 그 위에 “Onsets and Frames” 방식의 <strong>onset 예측기</strong>(MLP, 60개 음높이 출력)와 <strong>frame 예측기</strong>(선형층, 61개 클래스)를 얹어 50Hz 프레임 단위로 음 시작과 지속을 예측한다. onset 임계값 0.45, frame 임계값 0.25를 쓰고, 두 예측기의 이진 교차엔트로피 손실 합으로 학습한다.</p>
+<h2 id="방법론과-데이터">방법론과 데이터</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>입력</td>
+<td>복소 스펙트로그램 <span class="math inline"><em>X</em></span> (<span class="math inline"><em>C</em> × <em>F</em> × <em>T</em></span>), STFT로 생성</td>
+</tr>
+<tr class="even">
+<td>앞단</td>
+<td>Mel-band Projection: 멜 스케일 기반 <strong>겹치는</strong> 대역 분할 + 대역별 MLP</td>
+</tr>
+<tr class="odd">
+<td>본체</td>
+<td><span class="math inline"><em>L</em></span>층 interleaved RoPE Transformer (시간·주파수 번갈아 모델링)</td>
+</tr>
+<tr class="even">
+<td>분리 출력</td>
+<td>복소 IRM(cIRM) 마스크 추정 → iSTFT로 보컬 복원</td>
+</tr>
+<tr class="odd">
+<td>채보 출력</td>
+<td>Onsets and Frames: onset 예측기(60 음높이) + frame 예측기(61 클래스), 50Hz</td>
+</tr>
+<tr class="even">
+<td>학습 전략</td>
+<td>2단계: 보컬 분리 사전학습 → 멜로디 채보 미세조정</td>
+</tr>
+<tr class="odd">
+<td>분리 데이터</td>
+<td>MUSDB18HQ(150곡), MoisesDB(240곡), In-House(1533곡)</td>
+</tr>
+<tr class="even">
+<td>채보 데이터</td>
+<td>MIR-ST500(500곡), POP909(909곡)</td>
+</tr>
+<tr class="odd">
+<td>채보 지표</td>
+<td>mir_eval의 COn, COnP, COnPOff F-measure (피치 허용 50센트, 시간 허용 50ms; POP909는 80ms)</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid"><code>flowchart LR
+    A[혼합 음원&lt;br/&gt;STFT 복소 스펙트로그램] --&gt; B[Mel-band Projection&lt;br/&gt;겹치는 멜 대역 분할]
+    B --&gt; C[Interleaved RoPE Transformer&lt;br/&gt;시간·주파수 번갈아]
+    C --&gt; D[Embedding Projection]
+    D --&gt; E[1단계: 보컬 분리&lt;br/&gt;cIRM 마스크 → 보컬]
+    E --&gt;|사전학습 가중치| F[2단계: 미세조정]
+    F --&gt; G[Onset + Frame 예측기]
+    G --&gt; H[보컬 멜로디 음표&lt;br/&gt;onset·pitch·offset]</code></pre>
+<h2 id="결과와-의의">결과와 의의</h2>
+<p><strong>보컬 분리 (MUSDB18HQ 테스트셋, SDR dB, 높을수록 좋음):</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>모델</th>
+<th>Vocals SDR</th>
+<th>파라미터</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>HTDemucs (Sparse)</td>
+<td>9.37</td>
+<td>-</td>
+<td>추가 데이터 학습</td>
+</tr>
+<tr class="even">
+<td>BSRNN</td>
+<td>10.01</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr class="odd">
+<td>BS-RoFormer (b)</td>
+<td>12.82</td>
+<td>93.4M</td>
+<td>추가 데이터, 선행 SOTA</td>
+</tr>
+<tr class="even">
+<td><strong>Mel-RoFormer (b)</strong></td>
+<td><strong>13.29</strong></td>
+<td>105M</td>
+<td>추가 데이터, <strong>SOTA</strong></td>
+</tr>
+<tr class="odd">
+<td>BS-RoFormer (24k-small)</td>
+<td>10.56</td>
+<td>8.0M</td>
+<td>24kHz 모노</td>
+</tr>
+<tr class="even">
+<td><strong>Mel-RoFormer (24k-small)</strong></td>
+<td><strong>11.01</strong></td>
+<td>9.1M</td>
+<td>24kHz 모노, 경량</td>
+</tr>
+<tr class="odd">
+<td>Mel-RoFormer (24k-large)</td>
+<td>12.69</td>
+<td>50.7M</td>
+<td>24kHz 모노</td>
+</tr>
+</tbody>
+</table>
+<p>Mel-band Projection은 BS-RoFormer 대비 전 시나리오에서 평균 약 <strong>0.5dB</strong> 일관된 SDR 향상을 가져왔다.</p>
+<p><strong>보컬 멜로디 채보 (MIR-ST500 테스트셋, F-measure, 높을수록 좋음):</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>모델</th>
+<th>파라미터</th>
+<th>COn</th>
+<th>COnP</th>
+<th>COnPOff</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>A-VST</td>
+<td>-</td>
+<td>.783</td>
+<td>.707</td>
+<td>.538</td>
+</tr>
+<tr class="even">
+<td>Perceiver TF</td>
+<td>-</td>
+<td>-</td>
+<td>.777</td>
+<td>-</td>
+</tr>
+<tr class="odd">
+<td>SpecTNT</td>
+<td>8.4M</td>
+<td>.801</td>
+<td>.778</td>
+<td>.550</td>
+</tr>
+<tr class="even">
+<td><strong>Mel-RoF-small</strong></td>
+<td>14.5M</td>
+<td>.807</td>
+<td>.786</td>
+<td>.609</td>
+</tr>
+<tr class="odd">
+<td><strong>Mel-RoF-large</strong></td>
+<td>64.6M</td>
+<td><strong>.819</strong></td>
+<td><strong>.798</strong></td>
+<td><strong>.625</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>POP909 테스트셋 (시간 허용 80ms):</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>모델</th>
+<th>COn</th>
+<th>COnP</th>
+<th>COnPOff</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>SpecTNT</td>
+<td>.797</td>
+<td>.775</td>
+<td>.371</td>
+</tr>
+<tr class="even">
+<td>Mel-RoF-small</td>
+<td>.831</td>
+<td>.805</td>
+<td>.398</td>
+</tr>
+<tr class="odd">
+<td><strong>Mel-RoF-large</strong></td>
+<td><strong>.869</strong></td>
+<td><strong>.842</strong></td>
+<td><strong>.486</strong> (시나리오 f에서 .494)</td>
+</tr>
+</tbody>
+</table>
+<p>특히 가장 어려운 <strong>COnPOff(음 시작·음높이·음 끝 모두 정확)</strong> 지표에서 Mel-RoF-large는 SpecTNT 대비 MIR-ST500에서 약 <strong>7.5%p</strong> 향상을 보였다. 이는 깨끗한 보컬을 먼저 분리해 다른 악기 간섭을 최소화한 덕분으로, “분리를 기초 과제로 삼아 사전학습한다”는 전략의 효과를 입증한다. 또 사전학습 모델을 쓰면 15K 스텝 이내로 수렴하지만, 처음부터 학습하면 50K 스텝이 필요하고 성능도 크게 떨어진다고 보고했다.</p>
+<p>의의는 “음원 분리와 멜로디 채보를 하나의 아키텍처와 사전학습-미세조정 파이프라인으로 통합”한 데 있다. 저자들은 Mel-RoFormer가 코드 인식·다악기 채보 등 다른 MIR 과제의 기초 모델로도 확장될 잠재력이 있다고 결론짓는다.</p>
+<h2 id="한계와-비판">한계와 비판</h2>
+<ol type="1">
+<li><p><strong>막대한 학습 비용</strong>: 44.1kHz 스테레오 분리 모델은 16×A100 GPU로 약 <strong>93일</strong>(시나리오 b, 100만 스텝) 학습했다. 작은 24kHz 모델도 V100 16장으로 약 31일이 걸린다. 학술 재현이나 소규모 연구실에는 사실상 접근 불가능한 비용이다.</p></li>
+<li><p><strong>단성(monophonic) 멜로디 가정</strong>: 보컬 멜로디 채보는 “주선율은 단성”이라고 가정한다. 화음 보컬, 백킹 보컬, 동시 다성 보컬이 섞인 경우는 다루지 못한다.</p></li>
+<li><p><strong>레이블 품질 의존성</strong>: 저자들 스스로 POP909의 음 끝·시간 정렬 주석이 부정확하다고 지적하며 시간 허용치를 50ms에서 80ms로 늘렸다. 데이터셋별 주석 품질 차이가 성능 해석을 복잡하게 만든다. 두 데이터셋을 합쳐 학습하면 POP909는 좋아지지만 MIR-ST500은 나빠지는 트레이드오프도 관찰됐다.</p></li>
+<li><p><strong>파라미터 증가</strong>: Mel-RoFormer는 BS-RoFormer 대비 성능은 좋지만 파라미터가 늘어난다(93.4M → 105M). 0.5dB 향상이 추가 비용에 값하는지는 용도에 따라 다르다.</p></li>
+<li><p><strong>2단계 파이프라인의 복잡성</strong>: 통합 모델이 아니라 분리→채보 2단계라 학습·배포 파이프라인이 복잡하다. 분리 단계의 오류가 채보 단계로 전파될 위험도 구조적으로 존재한다.</p></li>
+</ol>
+<p>이런 한계에도 Mel-RoFormer는 보컬 분리와 멜로디 채보 양쪽에서 동시에 SOTA를 달성하고, 청각 특성에 맞춘 멜 대역 분할이라는 직관적 개선을 검증한 점에서 음악 오디오 모델링의 중요한 진전으로 평가된다.</p>
+</template>

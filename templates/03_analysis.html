@@ -1,0 +1,161 @@
+<template id="doc-03_analysis" data-title="[03] hFT-Transformer — 분석 보고서" data-docx="papers/03_Toyama2023_hFT/분석_보고서.docx"><h1 id="automatic-piano-transcription-with-hierarchical-frequency-time-transformer-분석-보고서">Automatic Piano Transcription with Hierarchical Frequency-Time Transformer 분석 보고서</h1>
+<h2 id="핵심-요약">핵심 요약</h2>
+<p>이 논문은 Sony AI 연구진이 제안한 <strong>hFT-Transformer</strong>로, 피아노 자동 채보(AMT)에 <strong>2단계 계층형 주파수-시간 Transformer</strong> 구조를 도입한 연구다. 핵심 통찰은 정확한 onset/offset 결정에는 <strong>장기적인 주파수·시간 의존성</strong>을 함께 봐야 하며, 이는 Transformer의 셀프 어텐션(self-attention)이 잘 포착할 수 있다는 것이다. 1단계는 주파수 축에서, 2단계는 시간 축에서 어텐션을 적용해 두 축을 분리·계층적으로 처리한다.</p>
+<p>성과는 분명하다. 널리 쓰이는 <strong>MAESTRO v3.0.0</strong>과 <strong>MAPS</strong> 데이터셋 모두에서 Frame, Note, Note with Offset, Note with Offset and Velocity의 <strong>모든 F1 지표에서 당시 최고 성능(state-of-the-art)</strong> 을 달성했다(<a href="https://arxiv.org/abs/2307.04305">초록</a>). 특히 가장 어려운 Note with Offset 항목에서 MAESTRO 90.53%로 기존 모델들을 큰 폭으로 앞섰다. 모델 크기는 5.5M 파라미터로, 26M의 Onsets and Frames나 54M의 시퀀스 변환 모델보다 훨씬 작다.</p>
+<p>추가로 추론 시 보폭을 절반으로 줄여 청크 경계의 부정확성을 줄이는 <strong>half-stride</strong> 기법을 제안했다. Transformer 기반 AMT의 효과를 설득력 있게 보여준 ISMIR 2023의 주요 결과로 평가된다.</p>
+<h2 id="서지-정보">서지 정보</h2>
+<p>저자는 Keisuke Toyama, Taketo Akama, Yukara Ikemiya, Yuhta Takida, Wei-Hsiang Liao, Yuki Mitsufuji이며 소속은 <strong>Sony AI / Sony Group</strong>이다. 논문은 2023년 <a href="https://archives.ismir.net/ismir2023/paper/000024.pdf">ISMIR 학회</a>에서 발표되었고, arXiv 사전 출판본은 <a href="https://arxiv.org/abs/2307.04305">arXiv:2307.04305</a>(2023년 7월 제출, CC BY 4.0)다. PyTorch 구현은 <a href="https://github.com/sony/hFT-Transformer">github.com/sony/hFT-Transformer</a>에 공개되어 있다.</p>
+<h2 id="상세-요약">상세 요약</h2>
+<p>피아노는 한 음이 여러 배음(harmonics)을 동시에 만들고, 음의 시작·끝을 정하려면 앞뒤 긴 맥락을 봐야 한다. 저자들은 이런 장기 의존성을 CNN·RNN보다 Transformer가 더 잘 포착한다고 보고, <strong>주파수 축과 시간 축을 분리해 계층적으로</strong> 어텐션을 적용했다.</p>
+<p><strong>1단계 계층</strong>은 세 부분으로 구성된다. (1) 시간 축에 1차원 합성곱 블록을 적용해 지역적 시간 특징을 뽑고, (2) <strong>주파수 축 Transformer 인코더</strong>가 스펙트럼 특징들 사이 의존성(어떤 주파수들이 함께 움직이는지 = 배음 구조)을 분석한다. 이 어텐션은 시간 축과 완전히 독립적으로 주파수 축에서만 수행된다. (3) <strong>주파수 축 Transformer 디코더</strong>가 크로스 어텐션으로 주파수 빈 차원(256)을 피아노 음 개수(88)로 변환한다. 이 디코더 출력에 선형층과 sigmoid를 거쳐 1단계 출력(output_1st)을 만든다.</p>
+<p><strong>2단계 계층</strong>은 <strong>시간 축 Transformer 인코더</strong>로, 1단계 출력을 받아 시간상 장기 의존성을 추가로 모델링해 최종 출력(output_2nd)을 만든다. 출력은 frame, onset, offset, velocity의 네 갈래이며, frame·onset·offset은 이진 교차엔트로피로, velocity는 128클래스 교차엔트로피로 학습된다. 학습 시에는 output_1st와 output_2nd 모두에 손실을 주고, 추론 시에는 output_2nd만 사용한다. onset/offset 타깃은 Kong et al.의 고해상도 회귀 방식(J=3)을 차용하고, 음 이벤트 변환에는 Kong et al.의 알고리즘을 쓴다.</p>
+<p>저자들은 청크(chunk) 양 끝에서 정확도가 떨어지는 문제를 관찰하고, 추론 시 보폭을 절반으로 줄여 청크 중앙부 결과만 사용하는 <strong>half-stride</strong> 기법으로 이를 보완했다. 절제 실험에서 2단계 인코더 추가(Note w/ offset 80.23→84.42), Transformer 디코더 변환기(선형 대비 우수), 1차원 합성곱(2차원 대비 압도적 우수)이 모두 유효함을 확인했다.</p>
+<h2 id="방법론과-데이터">방법론과 데이터</h2>
+<p>입력은 16 kHz 오디오의 로그 멜 스펙트로그램(256 멜 빈, FFT 2048, hop 16 ms)이며, 청크당 128프레임(N=128), 전후 마진 M=32를 둔다. 학습은 MAPS와 MAESTRO v3.0.0에서 수행했다.</p>
+<table>
+<thead>
+<tr class="header">
+<th>항목</th>
+<th>값</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>데이터셋</td>
+<td>MAPS, MAESTRO v3.0.0</td>
+</tr>
+<tr class="even">
+<td>MAPS split (train/val/test)</td>
+<td>139/71/60 곡 (8.3/4.4/5.5h)</td>
+</tr>
+<tr class="odd">
+<td>MAESTRO split</td>
+<td>962/137/177 곡 (159.2/19.4/20.0h)</td>
+</tr>
+<tr class="even">
+<td>샘플레이트</td>
+<td>16 kHz</td>
+</tr>
+<tr class="odd">
+<td>멜 빈 F</td>
+<td>256</td>
+</tr>
+<tr class="even">
+<td>FFT / hop</td>
+<td>2048 / 16 ms</td>
+</tr>
+<tr class="odd">
+<td>청크 프레임 N / 마진 M</td>
+<td>128 / 32</td>
+</tr>
+<tr class="even">
+<td>임베딩 차원 Z</td>
+<td>256</td>
+</tr>
+<tr class="odd">
+<td>FFN 차원</td>
+<td>512</td>
+</tr>
+<tr class="even">
+<td>어텐션 헤드</td>
+<td>4</td>
+</tr>
+<tr class="odd">
+<td>Transformer 층 수</td>
+<td>각 3층</td>
+</tr>
+<tr class="even">
+<td>출력</td>
+<td>frame, onset, offset, velocity (88 pitch)</td>
+</tr>
+<tr class="odd">
+<td>옵티마이저</td>
+<td>Adam</td>
+</tr>
+<tr class="even">
+<td>학습률</td>
+<td>0.0001 (ReduceLROnPlateau)</td>
+</tr>
+<tr class="odd">
+<td>배치 크기</td>
+<td>8</td>
+</tr>
+<tr class="even">
+<td>에폭</td>
+<td>MAPS 50 / MAESTRO 20</td>
+</tr>
+<tr class="odd">
+<td>파라미터</td>
+<td>5.5M</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid"><code>flowchart LR
+    A[오디오 16kHz] --&gt; B[로그 멜 스펙트로그램&lt;br/&gt;256 bins, hop 16ms]
+    B --&gt; C[1차원 합성곱&lt;br/&gt;시간 축]
+    C --&gt; D[1단계: 주파수축&lt;br/&gt;Transformer 인코더]
+    D --&gt; E[주파수축 Transformer 디코더&lt;br/&gt;256 bins → 88 pitch]
+    E --&gt; F[output_1st]
+    F --&gt; G[2단계: 시간축&lt;br/&gt;Transformer 인코더]
+    G --&gt; H[output_2nd&lt;br/&gt;frame/onset/offset/velocity]
+    H --&gt; I[half-stride 추론 + MIDI]</code></pre>
+<h2 id="결과와-의의">결과와 의의</h2>
+<p>MAESTRO v3.0.0 테스트셋 F1(%) 결과(<a href="https://archives.ismir.net/ismir2023/paper/000024.pdf">Table 2</a>):</p>
+<table>
+<thead>
+<tr class="header">
+<th>시스템</th>
+<th>파라미터</th>
+<th>Frame F1</th>
+<th>Note F1</th>
+<th>Note w/ Offset F1</th>
+<th>Offset &amp; Velocity F1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Seq2Seq (Hawthorne 2021)</td>
+<td>54M</td>
+<td>—</td>
+<td>96.01</td>
+<td>83.94</td>
+<td>82.75</td>
+</tr>
+<tr class="even">
+<td>HPPNet-sp (Wei et al.)</td>
+<td>1.2M</td>
+<td>93.15</td>
+<td>97.18</td>
+<td>83.80</td>
+<td>82.24</td>
+</tr>
+<tr class="odd">
+<td>Semi-CRFs (Yan et al.)</td>
+<td>9M</td>
+<td>90.75</td>
+<td>96.11</td>
+<td>88.42</td>
+<td>87.44</td>
+</tr>
+<tr class="even">
+<td><strong>hFT-Transformer</strong></td>
+<td>5.5M</td>
+<td>93.02</td>
+<td>97.43</td>
+<td>90.32</td>
+<td>89.25</td>
+</tr>
+<tr class="odd">
+<td><strong>hFT-Transformer (half-stride)</strong></td>
+<td>5.5M</td>
+<td><strong>93.24</strong></td>
+<td><strong>97.44</strong></td>
+<td><strong>90.53</strong></td>
+<td><strong>89.48</strong></td>
+</tr>
+</tbody>
+</table>
+<p>MAPS 테스트셋(Table 1)에서도 hFT-Transformer(half-stride)는 Frame 82.89, Note 85.14, Note w/ Offset 66.34, Offset &amp; Velocity 48.20으로 Onsets and Frames(78.30/82.29/50.22/35.59)와 ADSR(Kelz) 베이스라인을 전 지표에서 앞섰다. 절제 실험(Table 4)에서 2단계 시간 인코더를 제거한 변형(output_1st만 사용)은 Note w/ Offset이 84.42→80.23으로 떨어져 계층 구조의 효과를 입증했다. 단 5.5M 파라미터로 더 큰 모델들을 능가했다는 점에서, 주파수·시간 축을 분리한 어텐션 설계의 효율성을 보여준 의미 있는 결과다.</p>
+<h2 id="한계와-비판">한계와 비판</h2>
+<p>첫째, <strong>청크 경계 부정확성</strong>을 half-stride로 완화하지만 근본 해결은 아니며 추론 비용이 늘어난다. 둘째, 가장 어려운 Note with Offset 지표에서 hFT가 MAESTRO 최고지만, <strong>MAPS에서는 Note with Offset이 66.34%로 절대 수치가 여전히 낮아</strong> offset 정밀도는 미해결 과제로 남는다(특히 작은 데이터셋에서). 셋째, onset/offset 타깃과 이벤트 변환을 Kong et al.에 의존하므로 그 방식의 한계(짧은 연속음 분리 등)를 일부 상속한다. 넷째, <strong>피아노 단일 악기·솔로 연주에 한정</strong>되며, 저자 스스로 다악기·다른 악기로의 확장을 향후 과제로 명시한다. 다섯째, 2차원 합성곱 변형이 극단적으로 붕괴(Note F1 31.10)하는 등 구조가 설계 선택에 민감하다. 그럼에도 작은 모델로 SOTA를 달성하고 공개 코드를 제공해, Transformer 기반 AMT의 실용적 방향을 제시했다.</p>
+</template>

@@ -1,0 +1,144 @@
+<template id="doc-topic_glossary" data-title="마스터 용어집" data-docx="00_마스터_용어집.docx"><h1 id="마스터-용어집-amt-핵심-용어-35선">마스터 용어집 — AMT 핵심 용어 35선</h1>
+<blockquote>
+<p>AMT 리서치 아카이브 종합문서 · 작성 2026-06-21 출처: AMT 통합 마스터 보고서 v2, AMT 음악채보 리서치 보고서 사용법: 각 용어는 한글·English 병기 → 2~3문장 설명(비유 포함) → 등장 논문 번호. 논문 번호: 01 Onsets&amp;Frames · 02 ByteDance Piano · 03 hFT-Transformer · 04 Seq2Seq · 05 MT3 · 06 YourMT3+ · 07 Basic Pitch · 08 TabCNN · 09 FretNet · 10 Riley · 11 GAPS · 12 OLiMPiC · 13 Mel-RoFormer</p>
+</blockquote>
+<hr />
+<h2 id="문제-정의-problem-definition">§1 문제 정의 (Problem Definition)</h2>
+<h3 id="자동-음악-채보-automatic-music-transcription-amt">자동 음악 채보 · Automatic Music Transcription (AMT)</h3>
+<p>오디오 음원을 분석해 악보(MIDI, MusicXML, 악보 이미지, 기타 탭)로 자동 변환하는 기술 전체를 가리킨다. 사람 채보자가 음원을 듣고 악보로 받아 적는 일을 기계가 대신하는 것이다. 귀로 듣는 소리를 종이 위 기호로 옮기는 받아쓰기(dictation)의 음악판이라고 보면 된다. 등장 논문: 01,02,03,04,05,06,07,08,09,10,11,13</p>
+<h3 id="온셋-onset">온셋 · Onset</h3>
+<p>음이 시작되는 바로 그 순간을 말한다. 피아노 건반을 누르거나 기타 현을 튕긴 그 찰나의 시점이다. 채보에서 가장 중요한 단서인데, 정확한 시작점을 알아야 음표를 제자리에 놓을 수 있기 때문이다. 음악의 마침표·쉼표가 아니라 “여기서 말이 시작된다”는 신호에 가깝다. 등장 논문: 01,02,03,04,08,09,10</p>
+<h3 id="프레임-frame">프레임 · Frame</h3>
+<p>오디오를 아주 짧은 시간 토막(보통 10ms)으로 잘랐을 때의 한 토막을 말한다. 영화 필름의 한 컷처럼, 그 순간에 어떤 음이 울리고 있는지를 표시한다. Onset이 “음의 시작점”이라면 Frame은 “음이 지속되는 모든 구간”을 다룬다. 등장 논문: 01,08</p>
+<h3 id="폴리포닉-polyphonic">폴리포닉 · Polyphonic</h3>
+<p>여러 음이 동시에 울리는 상태를 말한다(반대는 한 번에 한 음만 나오는 monophonic). 피아노 코드나 합주처럼 여러 소리가 겹치면 주파수 성분이 뒤섞여 분리가 훨씬 어려워진다. 한 사람 말소리를 받아쓰는 것과 여러 사람이 동시에 떠드는 회의를 받아쓰는 것의 차이다. 등장 논문: 01,02,05,06,07</p>
+<h3 id="음고-pitch">음고 · Pitch</h3>
+<p>음의 높낮이를 말한다. 도·레·미가 다른 것이 pitch의 차이다. 피아노는 88개 건반으로 음고가 이산적(discrete)이라 분류 문제로 풀리지만, 기타 벤딩이나 보컬 비브라토는 음고가 연속적(continuous)으로 미끄러져 훨씬 까다롭다. 등장 논문: 01,02,07,09,13</p>
+<h3 id="다중음고-추정-multipitch-estimation">다중음고 추정 · Multipitch Estimation</h3>
+<p>한 시점에 동시에 울리는 여러 음고를 모두 알아내는 작업이다. Polyphonic 음악 채보의 핵심 하위 과제로, 화음 속에 어떤 음들이 들어 있는지를 한꺼번에 가려낸다. 비빔밥을 보고 들어간 재료를 모두 짚어내는 것과 비슷하다. 등장 논문: 05,06,09,10</p>
+<h3 id="mir-music-information-retrieval">MIR · Music Information Retrieval</h3>
+<p>음악에서 멜로디·리듬·화성·음색 같은 정보를 컴퓨터로 추출·분석하는 연구 분야 전체를 말한다. AMT는 MIR의 핵심 하위 과제 중 하나다. 도서관에서 책 내용을 색인하듯, 음악의 속살을 데이터로 색인하는 학문이라고 보면 된다. 등장 논문: 전반(01~13)</p>
+<hr />
+<h2 id="모델아키텍처-model-architecture">§2 모델·아키텍처 (Model &amp; Architecture)</h2>
+<h3 id="스펙트로그램-spectrogram">스펙트로그램 · Spectrogram</h3>
+<p>시간에 따라 어떤 주파수 성분이 얼마나 강한지를 2차원 이미지로 그린 것이다. 가로축은 시간, 세로축은 주파수, 색의 진하기가 세기다. 소리를 “보이게” 만든 사진으로, 거의 모든 AMT 모델의 입력이 된다. 등장 논문: 01,02,03,04,05,06,07</p>
+<h3 id="cqt-constant-q-transform">CQT · Constant-Q Transform</h3>
+<p>스펙트로그램의 일종인데, 주파수축을 음악적으로(옥타브가 일정 간격이 되도록) 배치한 변환이다. 일반 스펙트로그램(STFT)이 물리적 주파수를 균등하게 나눈다면, CQT는 사람이 음을 인지하는 방식·악기 음정 구조에 맞춰 나눠 채보에 유리하다. 자를 cm 대신 음정 간격으로 새긴 셈이다. 등장 논문: 08,09</p>
+<h3 id="transformer">Transformer</h3>
+<p>문장 속 단어들이 서로 얼마나 관련 있는지(attention)를 학습하는 신경망 구조다. 원래 기계번역에서 출발했고, 멀리 떨어진 요소 사이의 관계를 잘 포착한다. AMT에서는 스펙트로그램의 시간·주파수 패턴을 이 attention으로 읽어낸다. 등장 논문: 03,04,05,06,12</p>
+<h3 id="seq2seq-sequence-to-sequence">seq2seq · Sequence-to-Sequence</h3>
+<p>입력 시퀀스를 출력 시퀀스로 통째로 변환하는 방식이다. “스펙트로그램이라는 언어”를 “MIDI 이벤트라는 언어”로 옮기는 번역으로 채보를 재정의한 것이 04의 핵심 아이디어다. 영어 문장을 한국어 문장으로 옮기듯 소리를 악보 토큰으로 옮긴다. 등장 논문: 04,05,06,12</p>
+<h3 id="토큰화-tokenization">토큰화 · Tokenization</h3>
+<p>연속적인 음악 이벤트를 모델이 다룰 수 있는 이산적 기호(토큰)의 나열로 바꾸는 작업이다. “시각 0.5초에 C4 음 시작” 같은 사건을 단어 하나처럼 토큰으로 표현한다. 언어 모델이 문장을 단어 조각으로 쪼개듯, 음악을 이벤트 조각으로 쪼갠다. 등장 논문: 04,05,06,12</p>
+<h3 id="인코더-디코더-encoder-decoder">인코더-디코더 · Encoder-Decoder</h3>
+<p>입력을 압축해 의미를 담은 표현으로 만드는 인코더와, 그 표현을 출력 시퀀스로 풀어내는 디코더가 짝을 이룬 구조다. 인코더가 스펙트로그램을 “이해”하고 디코더가 악보 토큰을 “받아쓴다”. 통역사가 한 언어를 머릿속에 담았다가 다른 언어로 말하는 과정과 같다. 등장 논문: 04,05,06</p>
+<h3 id="t5-text-to-text-transfer-transformer">T5 · Text-to-Text Transfer Transformer</h3>
+<p>Google이 만든 범용 encoder-decoder Transformer 백본이다. MT3가 이 T5(약 6,000만~7,700만 파라미터)를 음악 채보에 그대로 가져다 썼다. 다목적으로 잘 만들어진 엔진 블록을 음악용으로 얹은 셈이다. 등장 논문: 05</p>
+<h3 id="mixture-of-experts-moe">Mixture-of-Experts (MoE)</h3>
+<p>여러 개의 전문가(expert) 하위 네트워크를 두고, 입력마다 알맞은 전문가만 골라 쓰는 구조다. 전체를 다 돌리지 않고 필요한 전문가만 활성화해 용량은 키우되 계산은 아낀다. 종합병원에서 환자를 적절한 전문 과로 보내는 것과 같다. 등장 논문: 06</p>
+<h3 id="자기지도-학습-self-supervised-learning">자기지도 학습 · Self-supervised Learning</h3>
+<p>정답 라벨 없이 대량의 비라벨 오디오만으로 모델이 스스로 구조를 학습하게 하는 방식이다. 라벨이 비싸고 희소한 음악 도메인에서 라벨 부족 문제를 보완하는 핵심 트렌드(MusicFM 등)다. 답안지 없이 문제집만 잔뜩 풀며 감을 익히는 학습이다. 등장 논문: 06(연계), 13(연계)</p>
+<h3 id="도메인-적응-domain-adaptation">도메인 적응 · Domain Adaptation</h3>
+<p>한 영역(예: 피아노)에서 학습한 모델을 다른 영역(예: 기타)에 맞춰 재활용하는 기법이다. 데이터가 풍부한 곳에서 배운 능력을 데이터가 부족한 곳으로 옮긴다. 02 ByteDance 피아노 모델을 기타로 적응시킨 10 Riley가 대표 사례다. 영어를 잘하는 사람이 그 기반으로 독일어를 빨리 배우는 것과 비슷하다. 등장 논문: 10,11</p>
+<h3 id="음원-분리-source-separation">음원 분리 · Source Separation</h3>
+<p>섞여 있는 음원을 보컬·드럼·베이스 등 개별 트랙(stem)으로 갈라내는 기술이다. 단일 악기에 강한 채보 모델 앞단에 두면, 분리 후 stem별로 채보해 다중악기 곡도 처리할 수 있다. 비빔밥을 재료별로 다시 분리해 따로 담는 작업이다. 등장 논문: 06,13</p>
+<h3 id="demucs">Demucs</h3>
+<p>Meta가 만든 음원 분리 SOTA 모델이다(약 9dB SDR, 4~6 stem). AMT 파이프라인의 표준 전처리 부품으로, basic-pitch 같은 단일악기 모델과 짝지어 자주 쓴다. 믹스된 곡을 깨끗한 stem으로 나눠 주는 분쇄기 역할이다. 등장 논문: 파이프라인 도구(직접 논문 아님)</p>
+<hr />
+<h2 id="데이터평가-data-evaluation">§3 데이터·평가 (Data &amp; Evaluation)</h2>
+<h3 id="정밀도재현율-precision-recall">정밀도/재현율 · Precision / Recall</h3>
+<p>Precision은 모델이 “있다”고 한 음 중 실제로 맞은 비율, Recall은 실제 음 중 모델이 잡아낸 비율이다. 전자는 헛검출을 줄이는 쪽, 후자는 놓침을 줄이는 쪽을 본다. 그물로 고기를 잡을 때 “잡은 것 중 진짜 고기 비율”과 “전체 고기 중 잡은 비율”의 차이다. 등장 논문: 01,02,09,10</p>
+<h3 id="f1-점수-f1-score">F1 점수 · F1 Score</h3>
+<p>Precision과 Recall의 조화평균으로, 둘의 균형 잡힌 단일 점수다(1=100%에 가까울수록 좋음). 헛검출도 적고 놓침도 적어야 높아진다. AMT 성능을 한 숫자로 비교할 때 가장 널리 쓰는 지표다. 등장 논문: 01,02,03,05,06,08,09,10</p>
+<h3 id="onset-f1">Onset F1</h3>
+<p>추정한 음의 <strong>시작 시점이 정답 ±50ms 이내</strong>면 맞은 것으로 채점하는 F1이다(offset·velocity는 무시). AMT에서 가장 널리 쓰이는 핵심 지표로, 피아노에서 96~97%까지 올라왔다. “음을 제때 짚었는가”만 본다. 등장 논문: 01,02,03</p>
+<h3 id="cqt">CQT</h3>
+<p>(§2 참조 — 입력 특징이자 데이터 표현으로도 분류 가능. 본 항목은 §2에 수록.)</p>
+<h3 id="양자화-quantization">양자화 · Quantization</h3>
+<p>채보된 MIDI의 불규칙한 실연주 타이밍을 정확한 박·음표 길이(4분음표, 8분음표 등)로 정돈하는 작업이다. 사람 연주는 미세하게 밀고 당기므로 그대로면 악보가 지저분하다. 악보 가독성을 좌우하는 last mile의 핵심 병목이다. 손으로 그린 들쭉날쭉한 선을 격자에 맞춰 곧게 펴는 일이다. (별도 의미로, 모델 경량화 quantization도 존재 — 효율화 트렌드.) 등장 논문: 후처리 단계(전 모델 공통 과제)</p>
+<h3 id="velocity">Velocity</h3>
+<p>건반·현을 얼마나 세게 쳤는지, 즉 음의 세기(다이내믹)를 나타내는 값이다. MIDI에서 0~127로 표현되며, 강약 표현이 곧 음악성이라 채보 품질에 중요하다. 02 ByteDance가 onset과 함께 이를 검출했다. 같은 음이라도 속삭임인지 외침인지를 구분하는 정보다. 등장 논문: 02</p>
+<h3 id="페달-pedal">페달 · Pedal</h3>
+<p>피아노 서스테인 페달(밟으면 음이 길게 울림)의 작동 여부를 말한다. 02 ByteDance가 최초로 페달 onset을 벤치마크(F1 91.86%)하며 채보에 포함시켰다. 음표만으로는 보이지 않지만 실제 울림을 좌우하는 숨은 변수다. 등장 논문: 02</p>
+<h3 id="maestro">MAESTRO</h3>
+<p>약 198.7시간, 1,276개 연주의 클래식 피아노 데이터셋이다. Disklavier(MIDI 캡처 피아노)로 오디오와 MIDI를 약 3ms 정밀도로 정렬해, 피아노 채보의 표준 벤치마크가 됐다. 피아노가 가장 먼저 정복된 데 이 풍부하고 정밀한 데이터의 공이 크다. 등장 논문: 01,02,03,05</p>
+<h3 id="guitarset">GuitarSet</h3>
+<p>360개 발췌(~30초), 6명 연주자의 기타 데이터셋이다. <strong>헥사포닉 픽업</strong>(현별 개별 수음)으로 현/프렛/주법 16종까지 주석해, 탭 채보의 표준 정답(ground truth)이다. 다만 360발췌의 클린 환경뿐이라 만성적 데이터 부족의 상징이기도 하다. 등장 논문: 05,08,09,10</p>
+<h3 id="tdr-tablature-disambiguation-rate">TDR · Tablature Disambiguation Rate</h3>
+<p>기타 탭 전용 지표로, 정확히 맞힌 피치 중에서 현/프렛 위치까지 맞힌 비율이다. 같은 음을 여러 위치로 칠 수 있어 생기는 모호성을 얼마나 풀었는지 측정한다. 그래서 탭 F는 항상 multipitch F보다 낮다(음은 맞혀도 위치에서 점수를 잃는다). 등장 논문: 09,10 (관련)</p>
+<hr />
+<h2 id="기타-tab-guitar-tablature">§4 기타 TAB (Guitar Tablature)</h2>
+<h3 id="태블러처-tablature-tab">태블러처 · Tablature (TAB)</h3>
+<p>어느 현의 몇 번 프렛을 누르는지를 직접 표기하는 기타·현악 전용 악보다. 음높이 대신 손가락 위치를 알려줘 초보자도 바로 따라 칠 수 있다. 오선지가 “무슨 음”을 말한다면 탭은 “어디를 눌러라”를 말한다. 등장 논문: 08,09,10,11</p>
+<h3 id="프렛현-할당-fretstring-assignment">프렛/현 할당 · Fret/String Assignment</h3>
+<p>검출한 음높이를 실제 (현, 프렛) 위치로 배정하는 작업이다. 한 음을 여러 위치로 칠 수 있어 오디오만으로는 구분이 거의 불가능한, 탭 고유의 난제다. HMM/Viterbi(운지 전환 비용)·그래프 최단경로·신경망 inhibition 같은 알고리즘으로 푼다. 같은 목적지로 가는 여러 길 중 손이 가장 편한 경로를 고르는 일이다. 등장 논문: 08,09,10</p>
+<h3 id="확장-주법-extended-techniques">확장 주법 · Extended Techniques</h3>
+<p>벤딩·슬라이드·해머온·풀오프·팜뮤트·하모닉스 등 기타 특유의 연주 기법을 말한다. 대부분 모델이 무시하고 09 FretNet만 연속 피치로 일부 시도하는, 미해결 연구 영역이다. 악보의 음표만으로는 담기지 않는 “연주의 표정”이다. 등장 논문: 09 (부분 시도), 10 (명시적 제외)</p>
+<hr />
+<h2 id="omr-optical-music-recognition">§5 OMR (Optical Music Recognition)</h2>
+<h3 id="omr-optical-music-recognition-1">OMR · Optical Music Recognition</h3>
+<p>오디오가 아니라 <strong>악보 이미지·PDF를 입력</strong>받아 디지털 악보로 변환하는 별도 분야다. 음악은 기호의 2D 배치가 의미를 결정하고 조표 하나가 여러 음을 오염시켜, 텍스트 OCR보다 훨씬 어렵다. 글자를 읽는 OCR의 음악판이지만 난이도가 한참 위다. 등장 논문: 12</p>
+<h3 id="lmx-linearized-musicxml">LMX · Linearized MusicXML</h3>
+<p>2D 악보 구조를 seq2seq 모델이 다루기 쉽게 한 줄(선형 시퀀스)로 펼친 MusicXML 표현이다. 12 OLiMPiC이 채택해, 이미지 인식을 토큰 번역 문제로 만들었다. 입체적인 악보를 한 가닥 실로 풀어 늘어놓은 것이다. 등장 논문: 12</p>
+<h3 id="tedn-tree-edit-distance-normalized">TEDn · Tree Edit Distance (normalized)</h3>
+<p>OMR 전용 평가지표로, 출력 악보의 트리 구조를 정답 트리로 바꾸는 데 필요한 편집량을 기반으로 정확도를 잰다. 단순 글자 일치가 아니라 악보의 구조적 정확성을 본다. 두 가계도를 같게 만드는 데 드는 수정 횟수를 세는 것과 비슷하다. 등장 논문: 12</p>
+<hr />
+<h2 id="도구파이프라인출력-포맷-tools-pipeline-output-formats">§6 도구·파이프라인·출력 포맷 (Tools, Pipeline &amp; Output Formats)</h2>
+<h3 id="midi-musical-instrument-digital-interface">MIDI · Musical Instrument Digital Interface</h3>
+<p>음의 피치·세기(velocity)·길이 같은 연주 데이터를 담는 표준 포맷이다. 이명동음(C#/Db) 구분이나 박자·조표가 없어 “그대로는 읽는 악보가 아니다”. 채보 모델의 1차 출력으로, 연주 정보지만 악보는 아닌 중간 단계다. 녹음된 손동작 기록에 가깝다. 등장 논문: 01,02,04,05,06,07,13 (공통 출력)</p>
+<h3 id="musicxml">MusicXML</h3>
+<p>올림/내림·박자표·조표·마디까지 담는 악보 표기의 교환 표준이다. MIDI가 “어떻게 연주됐나”라면 MusicXML은 “어떻게 적히나”를 다뤄, 사람이 읽는 진짜 악보에 해당한다. 서로 다른 악보 프로그램끼리 악보를 주고받는 공용어다. 등장 논문: 12(출력), 파이프라인 공통</p>
+<h3 id="music21">music21</h3>
+<p>MIDI ↔︎ MusicXML ↔︎ LilyPond 변환을 담당하는 Python 라이브러리(MIT)다. 채보 후처리의 허브로, 다만 실연주 MIDI는 양자화 전처리를 거쳐야 깔끔한 악보가 된다. 여러 악보 포맷 사이를 잇는 환승역이다. 등장 논문: 파이프라인 도구</p>
+<h3 id="basic-pitch-basic-pitch">Basic Pitch (basic-pitch)</h3>
+<p>Spotify가 공개한 약 17K 파라미터의 초소형 CNN 채보 엔진(Apache 2.0)이다. 악기무관·polyphonic·CPU 실시간이라 개인 개발자의 표준 출발점이자 서드파티 제품의 기본 부품이 됐다. 작고 가벼워 어디에나 끼워 넣는 만능 부품이다. 등장 논문: 07</p>
+<hr />
+<h2 id="빠른-참조-핵심-수치">빠른 참조: 핵심 수치</h2>
+<table>
+<thead>
+<tr class="header">
+<th>항목</th>
+<th>값</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>피아노 onset F1</td>
+<td>96~97%</td>
+<td>거의 성숙 (02,03)</td>
+</tr>
+<tr class="even">
+<td>기타 note F1 (클린)</td>
+<td>87~90%</td>
+<td>10 Riley supervised</td>
+</tr>
+<tr class="odd">
+<td>Onset 채점 허용오차</td>
+<td>±50ms</td>
+<td>Onset F1 기준</td>
+</tr>
+<tr class="even">
+<td>Frame 단위</td>
+<td>10ms</td>
+<td>Frame-level F1</td>
+</tr>
+<tr class="odd">
+<td>MAESTRO 규모</td>
+<td>~198.7h</td>
+<td>피아노 표준</td>
+</tr>
+<tr class="even">
+<td>MT3 파라미터</td>
+<td>약 60~77M</td>
+<td>T5 백본</td>
+</tr>
+</tbody>
+</table>
+<h2 id="관련-종합문서">관련 종합문서</h2>
+<ul>
+<li>논문 흐름: <code>00_논문_관계도와_흐름.md</code></li>
+<li>데이터셋 상세: <code>11_데이터셋_인벤토리.md</code></li>
+<li>도구·적용: <code>12_적용_권고.md</code></li>
+</ul>
+</template>

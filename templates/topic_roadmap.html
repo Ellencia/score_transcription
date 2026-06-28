@@ -1,0 +1,109 @@
+<template id="doc-topic_roadmap" data-title="제작 로드맵" data-docx="14_제작_로드맵.docx"><h1 id="제작-로드맵-오디오-기타-tab-도구-만들기">제작 로드맵 — 오디오 → 기타 TAB 도구 만들기</h1>
+<blockquote>
+<p>AMT 리서치 아카이브 종합문서 · 작성 2026-06-21 출처: AMT 통합 마스터 보고서 v2 §4·§5·§6 대상: 오디오를 기타 탭으로 바꾸는 도구를 직접 만들려는 개발자</p>
+</blockquote>
+<h2 id="전제-3단계-한-방향">전제: 3단계, 한 방향</h2>
+<p>핵심 전략은 마스터 보고서가 정한 그대로다. <strong>사전학습 모델을 wrapping하고, Demucs로 전처리하고, 노력을 MIDI→악보 변환 + 프렛 할당 + 편집 UI에 쏟는다.</strong> foundation model을 학습하지 않는다. 추론은 곡당 몇 센트, 진짜 해자는 노테이션 품질과 큐레이션된 니치다. 세 단계는 다음과 같이 쌓인다.</p>
+<pre class="mermaid"><code>flowchart LR
+    P1[&quot;Phase 1 · MVP&lt;br/&gt;오픈모델 조립&lt;br/&gt;Demucs→FretNet/basic-pitch&lt;br/&gt;→music21→alphaTab&quot;]
+    P2[&quot;Phase 2 · last-mile 해자&lt;br/&gt;양자화+프렛할당+편집 UI&quot;]
+    P3[&quot;Phase 3 · 니치 fine-tune&lt;br/&gt;합성데이터로 특화&lt;br/&gt;+표현표기+GP export&quot;]
+    P1 --&gt; P2 --&gt; P3</code></pre>
+<h2 id="phase-1-mvp-수-주">Phase 1 — MVP (수 주)</h2>
+<p>목표는 “어떤 오디오든 브라우저에서 깔끔한 기타 탭으로”라는 얇은 웹앱을 빠르게 출시하는 것이다. 전부 오픈소스 부품의 조립이다.</p>
+<pre><code>오디오 입력
+   ↓ Demucs v4         — 기타 stem 분리
+   ↓ FretNet / basic-pitch  — 채보 (음 + 가능하면 현/프렛)
+   ↓ music21           — 정리·양자화·MusicXML/GP 생성
+   ↓ alphaTab          — 브라우저 탭 렌더 + 싱크 재생</code></pre>
+<p><strong>기술 스택:</strong> - 채보: <code>basic-pitch</code>(pip 한 줄, 악기무관) 또는 <code>FretNet</code>(<code>cwitkowitz/guitar-transcription-continuous</code>, 연속 피치로 벤딩 표현) - 분리: <code>Demucs v4</code>(Meta, ~9dB SDR) - 후처리: <code>music21</code>(Python, MIDI↔︎MusicXML↔︎GP 허브) - 렌더: <code>alphaTab</code>(MPL-2.0, Guitar Pro + MusicXML 입력, 내장 신디 재생) - 보조: <code>librosa</code>(특징 추출), <code>torchaudio</code>(전처리)</p>
+<p><strong>GPU 필요성:</strong> basic-pitch 추론은 CPU로 충분하다. Demucs와 (쓴다면) ByteDance/YourMT3+는 GPU가 있으면 빠르지만 필수는 아니다. MVP는 CPU로도 돌릴 수 있다.</p>
+<p><strong>검증 기준:</strong> Klangio Guitar2Tabs·Songscription과 실곡 20개로 정직하게 벤치마크한다. <strong>계속 진행 판단 기준 = 내 출력이 그들보다 편집이 덜 필요하면 우위가 있다.</strong></p>
+<h2 id="phase-2-last-mile-해자-본-게임">Phase 2 — last-mile 해자 (본 게임)</h2>
+<p>여기가 진짜 차별화 구간이다. 약한 고리인 <strong>MIDI→악보 변환 + 프렛 할당</strong>에 직접 투자한다. 세 가지를 만든다.</p>
+<p><strong>(a) 리듬 양자화:</strong> neural beat-tracking 연구(Liu et al. 2022 등)를 차용해, 불규칙한 실연주 타이밍을 정확한 박·음표 길이로 정돈한다. DTW/score-following 경험이 그대로 직결된다. 목표는 “박스에서 바로 읽히는 리듬”.</p>
+<p><strong>(b) 연주가능성 제약 프렛/현 할당:</strong> 한 음을 여러 위치로 칠 수 있는 모호성을, 운지 전환 비용을 최소화하는 경로 탐색으로 푼다.</p>
+<pre class="mermaid"><code>flowchart TB
+    N[&quot;검출된 음 시퀀스 (피치)&quot;]
+    N --&gt; A[&quot;가능한 (현,프렛) 후보 전개&quot;]
+    A --&gt; V[&quot;HMM/Viterbi 또는 그래프 최단경로&lt;br/&gt;+ 운지 전환 비용&quot;]
+    V --&gt; T[&quot;연주 가능한 탭 운지 확정&quot;]
+    style V fill:#5d4037,stroke:#fff,color:#fff</code></pre>
+<p>알고리즘 선택지는 HMM/Viterbi(운지 전환 비용), 그래프 최단경로, 신경망 inhibition(물리적으로 불가능한 현 중복 억제)이다.</p>
+<p><strong>(c) 오디오-싱크 편집 UI:</strong> 거친 AI 출력을 사용자가 빠르게 깔끔한 탭으로 다듬는 human-in-the-loop 에디터. “마법 버튼”이 아니라 교정 루프가 핵심이다(Klangio Edit Mode, Soundslice 에디터 모델). 과대약속 금지.</p>
+<p><strong>Phase 2 목표 지표:</strong> GuitarSet급 소재에서 note onset F1 ~85%+ AND 박스에서 바로 읽히는 리듬.</p>
+<h2 id="phase-3-니치-fine-tune로-특화-해자-굳히기">Phase 3 — 니치 fine-tune로 특화 (해자 굳히기)</h2>
+<p>오픈 모델을 처음부터 학습하지 말고(pretrain 금지), <strong>니치 합성 데이터로 fine-tune</strong> 한다. DadaGP/SynthTab 방식 — 심볼릭 탭을 상용 플러그인으로 합성 오디오화해 페어 데이터를 만든다. 여기에 표현 표기(벤딩·슬라이드·해머온)를 추가하고, Guitar Pro export + 브라우저 play-along이라는 킬러 워크플로를 붙인다.</p>
+<p>소비자 유통이 어려우면 B2B API 각도로 전환한다(Moises의 “Music.AI” 플레이북 — 소비자 앱은 데이터 채널, 수익 엔진은 B2B API).</p>
+<h2 id="비용-구조">비용 구조</h2>
+<p>마스터 보고서의 비용 분석은 명확하다. <strong>사전학습 추론은 싸고, 학습은 비싸다 — 학습은 피하라.</strong></p>
+<table>
+<thead>
+<tr class="header">
+<th>항목</th>
+<th>비용</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>basic-pitch 추론</td>
+<td>~0 (CPU)</td>
+<td>GPU 불필요</td>
+</tr>
+<tr class="even">
+<td>Demucs/ByteDance 추론</td>
+<td>곡당 몇 센트</td>
+<td>GPU 사용 시</td>
+</tr>
+<tr class="odd">
+<td>foundation model 학습</td>
+<td>막대</td>
+<td><strong>하지 마라</strong></td>
+</tr>
+<tr class="even">
+<td>양자화·프렛할당·UX 개발</td>
+<td>당신의 시간</td>
+<td><strong>경쟁우위가 쌓이는 곳</strong></td>
+</tr>
+</tbody>
+</table>
+<p>지배적 비용은 컴퓨트가 아니라 노테이션 last mile과 UX에 들이는 개발 시간이며, 바로 그곳이 우위가 누적되는 지점이다.</p>
+<h2 id="단계별-요약">단계별 요약</h2>
+<table>
+<thead>
+<tr class="header">
+<th>Phase</th>
+<th>기간</th>
+<th>산출물</th>
+<th>성공 기준</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>1 MVP</td>
+<td>수 주</td>
+<td>오픈모델 조립 웹앱</td>
+<td>경쟁 대비 편집 덜 필요</td>
+</tr>
+<tr class="even">
+<td>2 해자</td>
+<td>본 게임</td>
+<td>양자화+프렛할당+편집 UI</td>
+<td>onset F1 85%+ &amp; 읽히는 리듬</td>
+</tr>
+<tr class="odd">
+<td>3 특화</td>
+<td>확장</td>
+<td>니치 fine-tune+표현표기+GP export</td>
+<td>킬러 워크플로 / B2B API</td>
+</tr>
+</tbody>
+</table>
+<h2 id="관련-종합문서">관련 종합문서</h2>
+<ul>
+<li>적용·도구 상세: <code>12_적용_권고.md</code></li>
+<li>데이터셋(SynthTab/DadaGP): <code>11_데이터셋_인벤토리.md</code></li>
+<li>솔로 개발자 경쟁 분석: <code>15_솔로개발자_로드맵.md</code></li>
+</ul>
+</template>

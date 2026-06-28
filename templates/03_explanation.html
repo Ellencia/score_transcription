@@ -1,0 +1,96 @@
+<template id="doc-03_explanation" data-title="[03] hFT-Transformer — 비전공자 해설" data-docx="papers/03_Toyama2023_hFT/비전공자_해설.docx"><h1 id="automatic-piano-transcription-with-hierarchical-frequency-time-transformer-비전공자-해설">Automatic Piano Transcription with Hierarchical Frequency-Time Transformer — 비전공자 해설</h1>
+<h2 id="이-논문이-풀려는-문제는-무엇인가">이 논문이 풀려는 문제는 무엇인가</h2>
+<p>피아노 녹음을 악보로 바꾸려면 컴퓨터가 두 가지를 동시에 잘해야 합니다. 하나는 “<strong>어떤 음들이 같이 울리고 있나</strong>”를 알아내는 것(세로, 즉 주파수 방향 보기), 다른 하나는 “<strong>이 음이 언제 시작해서 언제 끝났나</strong>”를 아는 것(가로, 즉 시간 방향 보기)입니다.</p>
+<p>피아노 한 음을 누르면 기본음 말고도 여러 배음(딸려 울리는 높은 음들)이 함께 납니다. 그래서 “도”를 쳤는데 컴퓨터가 위쪽 배음을 보고 “어? 더 높은 음도 눌렸나?”하고 헷갈리기 쉽습니다. 또 음의 시작과 끝을 정확히 찍으려면 앞뒤로 꽤 긴 흐름을 봐야 합니다. 이 논문은 요즘 번역기·챗봇에 쓰이는 강력한 기술인 <strong>Transformer</strong>를 가져와, 주파수 방향과 시간 방향을 따로따로, 그리고 단계적으로 살펴보게 만들어 이 문제를 해결합니다.</p>
+<h2 id="한-줄-비유로-본-핵심">한 줄 비유로 본 핵심</h2>
+<p><strong>“먼저 세로로 훑어 화음을 파악하고, 그 다음 가로로 훑어 박자를 파악한다 — 두 일을 분업한다.”</strong> — 합창단 사진을 볼 때, 먼저 “지금 누가 소리 내고 있나”를 한 열씩 보고, 그 다음 시간순으로 “언제 들어오고 빠지나”를 보는 식입니다.</p>
+<h2 id="핵심-아이디어를-한-그림으로">핵심 아이디어를 한 그림으로</h2>
+<pre class="mermaid"><code>flowchart TD
+    A[피아노 녹음 → 소리 그림] --&gt; B[1단계: 세로 보기&lt;br/&gt;주파수 Transformer]
+    B --&gt; C[어떤 음들이 함께 울리나&lt;br/&gt;= 화음·배음 구조 파악]
+    C --&gt; D[차원 변환&lt;br/&gt;주파수 → 88개 건반]
+    D --&gt; E[2단계: 가로 보기&lt;br/&gt;시간 Transformer]
+    E --&gt; F[음이 언제 시작·끝나나&lt;br/&gt;= 박자·길이 파악]
+    F --&gt; G[시작·끝·세기까지&lt;br/&gt;완성된 악보]</code></pre>
+<h2 id="알아야-할-핵심-용어">알아야 할 핵심 용어</h2>
+<table>
+<thead>
+<tr class="header">
+<th>용어</th>
+<th>영문</th>
+<th>직관적 설명 (비유 포함)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>트랜스포머</td>
+<td>Transformer</td>
+<td>챗봇·번역기에 쓰는 신경망. 멀리 떨어진 정보끼리 연결을 잘함</td>
+</tr>
+<tr class="even">
+<td>셀프 어텐션</td>
+<td>Self-attention</td>
+<td>“어디에 주목할지” 스스로 가중치를 매기는 기능. 회의에서 핵심 발언에 귀 기울이기</td>
+</tr>
+<tr class="odd">
+<td>계층형</td>
+<td>Hierarchical</td>
+<td>단계를 나눠 처리. 1단계 → 2단계로 순차 진행</td>
+</tr>
+<tr class="even">
+<td>주파수 축</td>
+<td>Frequency axis</td>
+<td>음의 높낮이 방향(세로)</td>
+</tr>
+<tr class="odd">
+<td>시간 축</td>
+<td>Time axis</td>
+<td>시간 흐름 방향(가로)</td>
+</tr>
+<tr class="even">
+<td>인코더 / 디코더</td>
+<td>Encoder / Decoder</td>
+<td>정보를 요약하는 부분 / 원하는 형태로 바꿔 내보내는 부분</td>
+</tr>
+<tr class="odd">
+<td>배음</td>
+<td>Harmonics</td>
+<td>한 음에 딸려 울리는 높은 음들. 종을 칠 때 함께 나는 울림</td>
+</tr>
+<tr class="even">
+<td>온셋 / 오프셋</td>
+<td>Onset / Offset</td>
+<td>음의 시작 / 끝 순간</td>
+</tr>
+<tr class="odd">
+<td>벨로시티</td>
+<td>Velocity</td>
+<td>건반을 누른 세기(강약)</td>
+</tr>
+<tr class="even">
+<td>파라미터</td>
+<td>Parameters</td>
+<td>모델의 “부품 수”. 적을수록 가볍고 빠름</td>
+</tr>
+<tr class="odd">
+<td>F1 점수</td>
+<td>F1 score</td>
+<td>정확도 성적표(0~100). 높을수록 좋음</td>
+</tr>
+</tbody>
+</table>
+<h2 id="어떻게-작동하는가">어떻게 작동하는가</h2>
+<ol type="1">
+<li><p><strong>소리를 그림으로 바꾼다.</strong> 녹음을 스펙트로그램(가로=시간, 세로=음 높낮이) 그림으로 만듭니다.</p></li>
+<li><p><strong>1단계 — 세로로 본다.</strong> 먼저 주파수 방향으로 Transformer가 훑으면서 “지금 어떤 음 높이들이 함께 울리고 있나”를 분석합니다. 이때 배음들이 어떻게 묶여 움직이는지를 파악해, 진짜 눌린 음과 딸려 나는 배음을 구별하는 데 도움을 줍니다.</p></li>
+<li><p><strong>변환 — 주파수를 건반으로 바꾼다.</strong> 그림의 세로 줄(256개 주파수 칸)을 실제 피아노 건반 88개에 대응하도록 깔끔하게 변환합니다.</p></li>
+<li><p><strong>2단계 — 가로로 본다.</strong> 이제 시간 방향으로 Transformer가 훑으면서 “각 음이 언제 시작해서 언제 끝나는지”의 긴 흐름을 파악합니다. 세로 분석과 가로 분석을 분업한 게 핵심입니다.</p></li>
+<li><p><strong>네 가지를 한꺼번에 받아 적는다.</strong> 음이 울리는 구간(frame), 시작(onset), 끝(offset), 세기(velocity)를 모두 출력합니다.</p></li>
+<li><p><strong>경계를 다듬는다.</strong> 소리를 토막 내 처리하면 토막의 양 끝이 부정확해지는데, 추론할 때 토막을 절반씩 겹쳐가며(half-stride) 가운데 부분만 채택해 정확도를 높입니다.</p></li>
+</ol>
+<h2 id="왜-중요한가">왜 중요한가</h2>
+<p>첫째, <strong>성적이 최고</strong>였습니다. 가장 널리 쓰는 두 데이터셋(MAESTRO, MAPS) 모두에서 모든 항목 1위를 기록했고, 특히 가장 까다로운 “음의 끝까지 정확히 맞히기”에서 큰 차이로 앞섰습니다(<a href="https://arxiv.org/abs/2307.04305">논문</a>).</p>
+<p>둘째, <strong>작은데 강합니다.</strong> 부품 수(파라미터)가 5.5M으로, 26M짜리 Onsets and Frames나 54M짜리 다른 모델보다 훨씬 가벼우면서도 더 좋은 성적을 냈습니다. 가볍다는 건 더 적은 컴퓨터 자원으로 돌릴 수 있다는 뜻이라 실용적으로 중요합니다.</p>
+<p>셋째, <strong>새로운 설계 철학</strong>을 보여줬습니다. “주파수와 시간을 한꺼번에 뭉뚱그리지 말고, 세로 따로 가로 따로 단계적으로 보자”는 아이디어가 효과적임을 입증했습니다. 챗봇·번역에서 위력을 떨친 Transformer가 음악 받아쓰기에서도 통한다는 것을 깔끔하게 증명한 셈입니다.</p>
+<p>코드도 <a href="https://github.com/sony/hFT-Transformer">공개</a>되어 있어 누구나 시험해볼 수 있습니다. 가볍고 정확한 자동 채보가 어디까지 가능한지 보여준, 최신 흐름을 대표하는 연구입니다.</p>
+</template>
